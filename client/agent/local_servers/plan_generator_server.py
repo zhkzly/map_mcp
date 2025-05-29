@@ -6,10 +6,16 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, field
 from enum import Enum
-import json
 
+
+from client.config.config import Configuration
+
+config=Configuration()
+config.load_env()
+
+plan_generator_config = config.load_config(os.getenv("PLAN_GENERATOR_CONFIG_PATH", "config/plan_generator_config.json"))
 # Create an MCP server
-mcp = FastMCP("Markdown Plan Manager")
+mcp = FastMCP("Markdown Plan Manager",settings=plan_generator_config)
 
 # Define task status enum
 class TaskStatus(str, Enum):
@@ -506,7 +512,8 @@ def _generate_markdown(plan: Plan) -> str:
 
 # Start MCP server
 def main():
-    mcp.run()
+    # 不采用默认的stdio启动而是http的方式启动
+    mcp.run(transport="streamable-http")
 
 if __name__ == "__main__":
     main()

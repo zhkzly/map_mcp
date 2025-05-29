@@ -3,10 +3,10 @@ import json
 import logging
 import os
 
-from client.config import Configuration
-from client.servers_client import Server
+from client.config.config import Configuration
+from client.client_server import StdioServer,StreamableHttpServer,SseServer
 from client.llm_client import BaseLLMClient,OpenAIClient, LLMClient
-from client.servers_client import BaseServer
+from client.client_server import BaseServer
 
 
 
@@ -160,12 +160,30 @@ class ChatSession:
 async def main() -> None:
     """Initialize and run the chat session."""
     config = Configuration()
-    server_config = config.load_config("servers_config.json")
-    servers = [
-        Server(name, srv_config)
-        for name, srv_config in server_config["mcpServers"].items()
-    ]
+    config.load_env()
+    # Load server configuration from JSON file
+    server_config = config.load_config(os.getenv("CLIENT_SERVER_CONFIG_PATH", "servers_config.json"))
+    # servers = [
+    #     StdioServer(name, srv_config)
+    #     if srv_config["type"] == "stdio" else StreamableHttpServer(name, srv_config)
+    #     for name, srv_config in server_config["mcpServers"].items()
+    # ]
+    servers=[]
+    for name, srv_config in server_config["mcpServers"].items():
+        if srv_config["type"] == "stdio":
+            servers.append(StdioServer(name, srv_config))
+        elif srv_config["type"] == "streamable-http":
+            servers.append(StreamableHttpServer(name, srv_config))
+        elif srv_config["type"] == "sse":
+            servers.append(SseServer(name, srv_config))
+        else:
+            logging.error(f"Unsupported server type: {srv_config['type']}")
+    if not servers:
+        logging.error("No valid servers found.")
+        return
+
     llm_client = LLMClient(config.llm_api_key)
+    # TODO:这个llm_client,已经没有必要继续存在了，需要进行重构
     chat_session = ChatSession(servers, llm_client)
     await chat_session.start()
 

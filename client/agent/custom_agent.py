@@ -3,12 +3,9 @@ import json
 import logging
 from typing import Any
 
-from client.servers_client import BaseServer,StdioServer
+from client.client_server import BaseServer,StdioServer
 from client.llm_client import BaseLLMClient, LLMClient
-from client.config import Configuration
-
-
-
+from client.config.config import Configuration
 
 class BaseAgent:
     """Base class for agents that interact with LLMs and tool servers."""
@@ -49,7 +46,6 @@ class BaseAgent:
     async def start(self) -> None:
         raise NotImplementedError("Subclasses must implement the start method.")
         
-
 
 # TODO:完善下面的agent，并且最终构建一个完整的调用main函数来执行整个的启动任务
 

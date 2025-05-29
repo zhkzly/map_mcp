@@ -1,6 +1,6 @@
 import os
 from typing import Any
-import json
+import commentjson
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -34,7 +34,7 @@ class Configuration:
             JSONDecodeError: If configuration file is invalid JSON.
         """
         with open(file_path, "r") as f:
-            return json.load(f)
+            return commentjson.load(f)
 
     @property
     def llm_api_key(self) -> str:
@@ -49,3 +49,5 @@ class Configuration:
         if not self.api_key:
             raise ValueError("LLM_API_KEY not found in environment variables")
         return self.api_key
+
+
