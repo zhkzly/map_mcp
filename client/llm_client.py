@@ -141,4 +141,4 @@ class OpenAIClient(BaseLLMClient):
             The OpenAI's response as a string.
         """
         response = self.client.chat.completions.create(messages=messages,model=self.model_id,temperature=0.7,max_tokens=4096,top_p=1,stream=False)
-        return response.choices[0].message.content
+        return response.choices[0].message.content,response.choices[0].message

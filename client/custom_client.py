@@ -4,9 +4,9 @@ import logging
 import os
 
 from client.config import Configuration
-from client.servers import Server
+from client.servers_client import Server
 from client.llm_client import BaseLLMClient,OpenAIClient, LLMClient
-from client.servers import BaseServer
+from client.servers_client import BaseServer
 
 
 
@@ -20,6 +20,8 @@ logging.basicConfig(
 # TODO:这里主要是如何管理用户的会话，实际上可以采用websocket的形式进行实时通信
 # 对于agent的其它更细致的管理应该在这里实现，比如短期记忆，规划的循环
 # 这里是实现的重点
+
+# TODO:我就实现一个最简单的带有记忆功能的的agent吧，仿照enio
 class ChatSession:
     """Orchestrates the interaction between user, LLM, and tools."""
 

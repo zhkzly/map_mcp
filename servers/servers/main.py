@@ -1,5 +1,5 @@
 import sys
 
-from servers.servers.main import main
+from servers.servers.simple_resource import main
 
 sys.exit(main())  # type: ignore[call-arg]

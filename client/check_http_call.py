@@ -18,5 +18,12 @@ if __name__ == "__main__":
     response = client.get_response([{"role":"user","content":"who are you ?"}])
     print(f"Response: {response}")    
     openai_client = OpenAIClient(api_key=api_key, model_id=os.getenv("MODEL_ID", "gpt-3.5-turbo"))
-    response = openai_client.get_response([{"role":"user","content":"what is AI ?"}])
-    print(f"Response: {response}")       
+    response,raw_response= openai_client.get_response([{"role":"user","content":"what is AI ?"}])
+    print(f"Response: {response}")
+    print(f"Raw Response: {raw_response}")
+
+
+    for key, value in raw_response.model_dump().items():
+        print(f"{key}: {value}")
+
+
