@@ -6,6 +6,7 @@ import os
 from client.config import Configuration
 from client.servers import Server
 from client.llm_client import BaseLLMClient,OpenAIClient, LLMClient
+from client.servers import BaseServer
 
 
 
@@ -22,8 +23,8 @@ logging.basicConfig(
 class ChatSession:
     """Orchestrates the interaction between user, LLM, and tools."""
 
-    def __init__(self, servers: list[Server], llm_client: BaseLLMClient) -> None:
-        self.servers: list[Server] = servers
+    def __init__(self, servers: list[BaseServer], llm_client: BaseLLMClient) -> None:
+        self.servers: list[BaseServer] = servers
         self.llm_client: BaseLLMClient = llm_client
 
     async def cleanup_servers(self) -> None:
