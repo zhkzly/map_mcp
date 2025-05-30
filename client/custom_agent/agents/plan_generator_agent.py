@@ -5,35 +5,44 @@ from typing import Any, List, Dict
 from client.client_server import BaseServer
 from client.llm_client import BaseLLMClient
 
-import os
 from dotenv import load_dotenv
 load_dotenv()
 
 from client.custom_agent.agents.react_agent import BaseAgent
 
 PLAN_GENERATOR_PROMPT = """
-You are a ReAct agent designed to solve problems through a cycle of reasoning, acting, and observing. Your goal is to answer the user's query accurately by breaking it down into steps, reasoning about each step, and using tools when necessary.
-
-### Instructions:
-1. **Understand the Query**: Analyze the user's input to identify the task or question.
-2. **Reasoning**: Think step-by-step to determine the best approach. Explain your reasoning clearly, considering possible actions or information needed.
-3. **Action**: If external information or computation is required, call the appropriate tool by specifying its name and parameters. Only use tools when necessary.
-4. **Observation**: Incorporate the results of tool calls into your reasoning to refine your answer.
-5. **Final Answer**: Provide a clear, concise response to the user's query once all steps are complete.
+You are a ReAct Plan-Generating Agent designed to create detailed, actionable plans for user-specified tasks, stored as Markdown files for interoperability. Your role is to analyze the task, reason through the steps required, and produce a structured JSON plan that another agent can execute. You do not execute the plan but focus on planning by breaking down the task, considering dependencies, resources, and potential challenges, using available tools to gather necessary information.
 
 ### Available Tools:
 {tools_description}
 
-### Guidelines:
-- If a tool is needed, include a tool call in your response with the format specified by the API.
-- If no tool is needed, provide the answer directly in the `content` field.
-- If the query is unclear, ask for clarification and explain why.
-- Avoid unnecessary tool calls; reason first to determine if they are required.
-- If multiple steps are needed, iterate through reasoning and tool calls until the task is resolved.
-
-
-Please respond with your reasoning, any necessary tool calls, and the final answer (if ready). If a tool call is needed, include it in the API-compatible format. If the query requires clarification, ask specific questions.
-"""
+### Instructions:
+1. **Understand the Task**: Analyze the user's input to identify the goal, scope, and context of the task.
+2. **Reasoning**: Think step-by-step to determine the best approach for completing the task. Consider:
+   - Subtasks and their logical sequence.
+   - Dependencies between steps (e.g., what must be completed first).
+   - Resources required (e.g., tools, data, or team members).
+   - Potential challenges and mitigation strategies.
+3. **Action**: Use tools to gather information needed for planning (e.g., existing plans, constraints, or task status). Call tools only when necessary.
+4. **Observation**: Incorporate tool call results into your reasoning to refine the plan.
+5. **Plan Generation**: Produce a structured JSON plan with the following format:
+   ```json
+   {
+     "plan_id": "<unique plan identifier>",
+     "title": "<plan title>",
+     "description": "<plan description>",
+     "tasks": [
+       {
+         "task_id": "<unique task identifier>",
+         "content": "<task description>",
+         "dependencies": ["<task_id of dependent tasks>"],
+         "resources": ["<required tools, data, or inputs>"],
+         "expected_output": "<description of expected result>",
+         "notes": ["<additional notes or considerations>"]
+       }
+     ],
+     "notes": ["<overall plan notes or considerations>"]
+   }"""
 
 class PlanGeneratorAgent(BaseAgent):
     """Implements a Plan Generator agent using LLM and tool servers with proper OpenAI tool calling."""
@@ -55,79 +64,87 @@ class PlanGeneratorAgent(BaseAgent):
             })
         return tools_schema
 
-    async def start(self) -> None:
-        try:
-            # Initialize all servers
-            for server in self.servers:
-                try:
-                    await server.initialize()
-                except Exception as e:
-                    logging.error(f"Failed to initialize server: {e}")
-                    await self.cleanup_servers()
-                    return
+    async def initialize_servers(self) -> None:
+        """Initialize all servers."""
+        for server in self.servers:
+            try:
+                await server.initialize()
+            except Exception as e:
+                logging.error(f"Failed to initialize server: {e}")
+                await self.cleanup_servers()
+                return
 
-            # Collect all tools from all servers
-            all_tools = []
-            for server in self.servers:
-                tools = await server.list_tools()
-                all_tools.extend(tools)
-            
-            # Build tools schema for OpenAI
-            tools_schema = self._build_tools_schema(all_tools)
-            tools_description = "\n".join([tool.format_for_llm() for tool in all_tools])
 
-            system_prompt = PLAN_GENERATOR_PROMPT.format(tools_description=tools_description)
-            
-            messages = [{"role": "system", "content": system_prompt}]
 
-            while True:
-                try:
-                    user_input = input("You: ").strip()
-                    if user_input.lower() in ["quit", "exit"]:
-                        logging.info("Exiting...")
-                        break
-                    
-                    messages.append({"role": "user", "content": user_input})
-                    
-                    # Continue the conversation until no more tool calls are needed
-                    max_iterations = int(os.getenv("MAX_ITERATIONS", 25))  # Prevent infinite loops
-                    iteration = 0
-                    
-                    while iteration < max_iterations:
-                        iteration += 1
-                        
-                        # Get LLM response
-                        llm_response_content, llm_response = self.llm_client.get_response(messages)
-                        
-                        # Add assistant's response to messages
-                        if llm_response.get("message"):
-                            messages.append(llm_response["message"])
-                        
-                        # Check if the assistant wants to use tools
-                        acted, tool_results = await self.process_llm_response(llm_response)
-                        
-                        if acted:
-                            # Add all tool results to messages
-                            for tool_result in tool_results:
-                                messages.append(tool_result)
-                            
-                            logging.info(f"Executed {len(tool_results)} tools, continuing conversation...")
-                            # Continue the loop to get the assistant's next response
-                            
-                        else:
-                            # No tools called, this is the final response
-                            print(f"Assistant: {llm_response_content}")
-                            break
-                    
-                    if iteration >= max_iterations:
-                        print("Assistant: I've reached the maximum number of tool calls for this request.")
-                        
-                except KeyboardInterrupt:
-                    logging.info("\nExiting...")
+    async def plan_generate(self, user_input: str) -> None:
+        """Generate a plan based on user input."""
+        # This method can be used to generate a plan based on user input
+        # For now, it just returns the user input as a placeholder
+        await self.initialize_servers()
+        # Collect all tools from all servers
+        all_tools = []
+        for server in self.servers:
+            tools = await server.list_tools()
+            all_tools.extend(tools)
+        
+        # Build tools schema for OpenAI
+        tools_schema = self._build_tools_schema(all_tools)
+        tools_description = "\n".join([tool.format_for_llm() for tool in all_tools])
+
+        system_prompt = PLAN_GENERATOR_PROMPT.format(tools_description=tools_description)
+        
+        messages = [{"role": "system", "content": system_prompt}]
+
+        while True:
+            try:
+                llm_response_content, acted = await self.process_one_query(messages, user_input)
+                if not acted:
+                    # If no tools were called, print the final response
+                    print(f"Assistant: {llm_response_content}")
                     break
-                    
-        finally:
-            await self.cleanup_servers()
+            # TODO: 这个停止条件可以适当改变，比如可能会出现让其修改指令的目的，
+            except KeyboardInterrupt:
+                logging.info("\nExiting...")
+                break
+        
+        await self.cleanup_servers()
 
+
+
+    # TODO:是每次都重新创建一个新的server还是复用现有的server
+    async def start(self) -> None:
+        await self.initialize_servers()
+        # Collect all tools from all servers
+        all_tools = []
+        for server in self.servers:
+            tools = await server.list_tools()
+            all_tools.extend(tools)
+        
+        # Build tools schema for OpenAI
+        tools_schema = self._build_tools_schema(all_tools)
+        tools_description = "\n".join([tool.format_for_llm() for tool in all_tools])
+
+        system_prompt = PLAN_GENERATOR_PROMPT.format(tools_description=tools_description)
+        
+        messages = [{"role": "system", "content": system_prompt}]
+
+        while True:
+            try:
+                user_input = input("plan generator,you: ").strip()
+                if user_input.lower() in ["quit", "exit"]:
+                    logging.info("Exiting...")
+                    break
+
+                llm_response_content, acted = await self.process_one_query(messages, user_input)
+                if not acted:
+                    # If no tools were called, print the final response
+                    print(f"Assistant: {llm_response_content}")
+                    break
+            # TODO: 这个停止条件可以适当改变，比如可能会出现让其修改指令的目的，
+            except KeyboardInterrupt:
+                logging.info("\nExiting...")
+                break
+        
+        await self.cleanup_servers()
 
 

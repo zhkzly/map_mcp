@@ -1,12 +1,14 @@
 import asyncio
-import json
 import logging
 import os
-
+import json
 from client.config.config import Configuration
 from client.client_server import StdioServer,StreamableHttpServer,SseServer
-from client.llm_client import BaseLLMClient,OpenAIClient, LLMClient
+from client.llm_client import OpenAIClient, LLMClient
 from client.client_server import BaseServer
+from client.custom_agent.agents.react_agent import BaseAgent
+from client.custom_agent.agents.plan_generator_agent import PlanGeneratorAgent
+from client.custom_agent.agents.plan_executor_agent import PlanExecutorAgent
 
 
 
@@ -15,7 +17,37 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
+SYSTEM_PROMPT = """
+You are a helpful assistant that decides whether to answer a user's query directly or delegate it to an agent for specialized processing. Your role is to analyze the user's input and return a JSON object with two keys: `content` and `tool_call`. The `content` key holds either a direct response or task parameters, and `tool_call` is either null or a dictionary with parameters and a `use_agent` flag.
 
+### Instructions:
+1. **Understand the Request**: Determine if the query can be answered directly (e.g., general questions) or requires an agent (e.g., creating or executing a plan).
+2. **Reasoning**: Decide based on the task:
+   - **Direct Response**: For informational queries (e.g., "What is a marketing plan?"), set `content` to the answer and `tool_call` to null.
+   - **Agent Delegation**: For tasks like creating plans (e.g., "Create a marketing campaign plan") or executing plans (e.g., "Execute the latest plan"), set `content` to a string combining task details (e.g., "Marketing Campaign: Launch plan") and `tool_call` to a dictionary with `use_agent: true` and parameters (e.g., `content`, `plan_id`).
+3. **Output**: Return a JSON object with:
+   - `content`: A string (direct response or combined task parameters).
+   - `tool_call`: null (no agent) or a dictionary with `use_agent: true` and parameters (e.g., `{"use_agent": true, "content": "Marketing Campaign: Launch plan"}` or `{"use_agent": true, "plan_id": "1234"}`).
+   If the task is unclear, set `content` to a clarification request and `tool_call` to null.
+4. **Guidelines**:
+   - Combine plan title and description into a single `content` string for agent tasks (e.g., "Marketing Campaign: Launch plan").
+   - Set `use_agent: true` in `tool_call` for agent delegation.
+   - Ensure the output is JSON-serializable and parseable with `json.loads`.
+
+### Example Interactions:
+**User**: What is a marketing plan?
+- Reasoning: Informational query. Answer directly.
+- Output: {"content": "A marketing plan is a strategic document outlining marketing goals, target audiences, and tactics.", "tool_call": null}
+
+**User**: Create a plan for a marketing campaign.
+- Reasoning: Requires creating a plan. Delegate to an agent with combined content.
+- Output: {"content": "Marketing Campaign: Plan for product launch", "tool_call": {"use_agent": true, "content": "Marketing Campaign: Plan for product launch"}}
+
+**User**: Run plan 1234.
+- Reasoning: Specifies a plan for execution. Delegate with plan_id.
+- Output: {"content": "Executing plan 1234", "tool_call": {"use_agent": true, "plan_id": "1234"}}
+
+Please respond with a JSON object containing `content` and `tool_call`. Ensure `tool_call` is null or a dictionary with `use_agent: true` and relevant parameters. If clarification is needed, set `content` to a clarification message and `tool_call` to null."""
 
 # TODO:这里主要是如何管理用户的会话，实际上可以采用websocket的形式进行实时通信
 # 对于agent的其它更细致的管理应该在这里实现，比如短期记忆，规划的循环
@@ -25,9 +57,13 @@ logging.basicConfig(
 class ChatSession:
     """Orchestrates the interaction between user, LLM, and tools."""
 
-    def __init__(self, servers: list[BaseServer], llm_client: BaseLLMClient) -> None:
+    def __init__(self, servers: list[BaseServer], plan_generator: BaseAgent, plan_executor: BaseAgent) -> None:
         self.servers: list[BaseServer] = servers
-        self.llm_client: BaseLLMClient = llm_client
+        self.plan_generator: BaseAgent = plan_generator
+        self.plan_executor: BaseAgent = plan_executor
+        self.tools: dict = {"plan_generator": self.plan_generator, "plan_executor": self.plan_executor}
+        self.cheap_llm= OpenAIClient(api_key=os.getenv("OPENAI_API_KEY", ""),
+                                     model_id=os.getenv("MODEL_ID", "gpt-3.5-turbo"))
 
     async def cleanup_servers(self) -> None:
         """Clean up all servers properly."""
@@ -37,49 +73,9 @@ class ChatSession:
             except Exception as e:
                 logging.warning(f"Warning during final cleanup: {e}")
 
-    async def process_llm_response(self, llm_response: str) -> str:
-        """Process the LLM response and execute tools if needed.
-
-        Args:
-            llm_response: The response from the LLM.
-
-        Returns:
-            The result of tool execution or the original response.
-        """
-        import json
-
-        try:
-            tool_call = json.loads(llm_response)
-            if "tool" in tool_call and "arguments" in tool_call:
-                logging.info(f"Executing tool: {tool_call['tool']}")
-                logging.info(f"With arguments: {tool_call['arguments']}")
-
-                for server in self.servers:
-                    tools = await server.list_tools()
-                    if any(tool.name == tool_call["tool"] for tool in tools):
-                        try:
-                            result = await server.execute_tool(
-                                tool_call["tool"], tool_call["arguments"]
-                            )
-
-                            if isinstance(result, dict) and "progress" in result:
-                                progress = result["progress"]
-                                total = result["total"]
-                                percentage = (progress / total) * 100
-                                logging.info(
-                                    f"Progress: {progress}/{total} ({percentage:.1f}%)"
-                                )
-
-                            return f"Tool execution result: {result}"
-                        except Exception as e:
-                            error_msg = f"Error executing tool: {str(e)}"
-                            logging.error(error_msg)
-                            return error_msg
-
-                return f"No server found with tool: {tool_call['tool']}"
-            return llm_response
-        except json.JSONDecodeError:
-            return llm_response
+    def add_tool(self, name, tool) -> None:
+        """Add a tool to the session."""
+        self.tools[name] = tool
 
     async def start(self) -> None:
         """Main chat session handler."""
@@ -92,36 +88,8 @@ class ChatSession:
                     await self.cleanup_servers()
                     return
 
-            all_tools = []
-            for server in self.servers:
-                tools = await server.list_tools()
-                all_tools.extend(tools)
 
-            tools_description = "\n".join([tool.format_for_llm() for tool in all_tools])
-
-            system_message = (
-                "You are a helpful assistant with access to these tools:\n\n"
-                f"{tools_description}\n"
-                "Choose the appropriate tool based on the user's question. "
-                "If no tool is needed, reply directly.\n\n"
-                "IMPORTANT: When you need to use a tool, you must ONLY respond with "
-                "the exact JSON object format below, nothing else:\n"
-                "{\n"
-                '    "tool": "tool-name",\n'
-                '    "arguments": {\n'
-                '        "argument-name": "value"\n'
-                "    }\n"
-                "}\n\n"
-                "After receiving a tool's response:\n"
-                "1. Transform the raw data into a natural, conversational response\n"
-                "2. Keep responses concise but informative\n"
-                "3. Focus on the most relevant information\n"
-                "4. Use appropriate context from the user's question\n"
-                "5. Avoid simply repeating the raw data\n\n"
-                "Please use only the tools that are explicitly defined above."
-            )
-
-            messages = [{"role": "system", "content": system_message}]
+            messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
             while True:
                 try:
@@ -131,23 +99,17 @@ class ChatSession:
                         break
 
                     messages.append({"role": "user", "content": user_input})
-
-                    llm_response = self.llm_client.get_response(messages)
-                    logging.info("\nAssistant: %s", llm_response)
-
-                    result = await self.process_llm_response(llm_response)
-
-                    if result != llm_response:
-                        messages.append({"role": "assistant", "content": llm_response})
-                        messages.append({"role": "system", "content": result})
-
-                        final_response = self.llm_client.get_response(messages)
-                        logging.info("\nFinal response: %s", final_response)
-                        messages.append(
-                            {"role": "assistant", "content": final_response}
-                        )
+                    response_content, raw_response = await self.cheap_llm.get_response(messages)
+                    response_content = json.loads(raw_response["choices"][0]["message"]["content"])
+                    tool_call= response_content.get("tool_call")
+                    if not tool_call:
+                        logging.info("\n using plan_generator to generate a plan")  
+                        await self.plan_generator.plan_generate(tool_call["content"])
+                        logging.info("\n using plan_executor to execute the plan")
+                        await self.plan_executor.execute_plan(tool_call["content"])
                     else:
-                        messages.append({"role": "assistant", "content": llm_response})
+                        messages.append({"role": "assistant", "content": response_content.get("content", "")})
+                        continue
 
                 except KeyboardInterrupt:
                     logging.info("\nExiting...")
@@ -182,9 +144,44 @@ async def main() -> None:
         logging.error("No valid servers found.")
         return
 
-    llm_client = LLMClient(config.llm_api_key)
-    # TODO:这个llm_client,已经没有必要继续存在了，需要进行重构
-    chat_session = ChatSession(servers, llm_client)
+
+    # config local server client,必须考虑重新修改这些名称了，区分度不够
+    local_server_config = config.load_config(os.getenv("LOCAL_SERVER_CONFIG_PATH", "local_server_config.json"))
+    local_server_client={"plan_executor_server": None, "plan_generator_server": None}
+    for name, srv_config in local_server_config["localServers"].items():
+
+        if srv_config["type"] == "stdio":
+            local_server_client[name]=StdioServer(name, srv_config)
+        elif srv_config["type"] == "streamable-http":
+            local_server_client[name]=StreamableHttpServer(name, srv_config)
+        elif srv_config["type"] == "sse":
+            local_server_client[name]=SseServer(name, srv_config)
+        else:
+            logging.error(f"Unsupported server type: {srv_config['type']}")
+
+
+    # 构造agent
+    plan_generator = PlanGeneratorAgent(
+        servers=[local_server_client["plan_generator_server"]],
+       llm_client=OpenAIClient(
+            api_key=os.getenv("OPENAI_API_KEY", ""),
+            model_id=os.getenv("MODEL_ID", "gpt-3.5-turbo")
+        ))
+    plan_executor = PlanExecutorAgent(
+        servers=[local_server_client["plan_executor_server"]],
+        llm_client=OpenAIClient(
+            api_key=os.getenv("OPENAI_API_KEY", ""),
+            model_id=os.getenv("MODEL_ID", "gpt-3.5-turbo")
+        )
+    )
+
+    chat_session = ChatSession(
+        servers=servers,
+        plan_generator=plan_generator,
+        plan_executor=plan_executor
+    )
+    
+
     await chat_session.start()
 
 

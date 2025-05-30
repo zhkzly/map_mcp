@@ -100,6 +100,44 @@ class BaseAgent:
 
         return True, tool_results
 
+    async def process_one_query(self, messages:List[Dict[str, str]], query: str) -> str:
+
+        messages.append({"role": "user", "content": query})
+
+        # Continue the conversation until no more tool calls are needed
+        max_iterations = int(os.getenv("MAX_ITERATIONS", 25))  # Prevent infinite loops
+        iteration = 0
+        while iteration < max_iterations:
+            iteration += 1
+            
+            # Get LLM response
+            llm_response_content, llm_response = self.llm_client.get_response(messages)
+            
+            # Add assistant's response to messages
+            if llm_response.get("message"):
+                messages.append(llm_response["message"])
+            
+            # Check if the assistant wants to use tools
+            acted, tool_results = await self.process_llm_response(llm_response)
+            
+            if acted:
+                # Add all tool results to messages
+                for tool_result in tool_results:
+                    messages.append(tool_result)
+                
+                logging.info(f"Executed {len(tool_results)} tools, continuing conversation...")
+                # Continue the loop to get the assistant's next response
+                
+            else:
+                # No tools called, this is the final response
+                print(f"Assistant: {llm_response_content}")
+                return llm_response_content,acted
+
+        
+        if iteration >= max_iterations:
+            print("Assistant: I've reached the maximum number of tool calls for this request.")
+                    
+
     async def cleanup_servers(self) -> None:
         """Clean up all servers properly."""
         for server in reversed(self.servers):
@@ -154,79 +192,52 @@ class ReActAgent(BaseAgent):
             })
         return tools_schema
 
+    async def initialize_servers(self) -> None:
+        """Initialize all servers."""
+        for server in self.servers:
+            try:
+                await server.initialize()
+            except Exception as e:
+                logging.error(f"Failed to initialize server: {e}")
+                await self.cleanup_servers()
+                return
+
+
     async def start(self) -> None:
-        try:
-            # Initialize all servers
-            for server in self.servers:
-                try:
-                    await server.initialize()
-                except Exception as e:
-                    logging.error(f"Failed to initialize server: {e}")
-                    await self.cleanup_servers()
-                    return
 
-            # Collect all tools from all servers
-            all_tools = []
-            for server in self.servers:
-                tools = await server.list_tools()
-                all_tools.extend(tools)
-            
-            # Build tools schema for OpenAI
-            tools_schema = self._build_tools_schema(all_tools)
-            tools_description = "\n".join([tool.format_for_llm() for tool in all_tools])
+        # Collect all tools from all servers
+        all_tools = []
+        for server in self.servers:
+            tools = await server.list_tools()
+            all_tools.extend(tools)
+        
+        # Build tools schema for OpenAI
+        tools_schema = self._build_tools_schema(all_tools)
+        tools_description = "\n".join([tool.format_for_llm() for tool in all_tools])
 
-            system_prompt = REACT_PROMPT.format(tools_description=tools_description)
-            
-            messages = [{"role": "system", "content": system_prompt}]
+        system_prompt = REACT_PROMPT.format(tools_description=tools_description)
+        
+        messages = [{"role": "system", "content": system_prompt}]
 
-            while True:
-                try:
-                    user_input = input("You: ").strip()
-                    if user_input.lower() in ["quit", "exit"]:
-                        logging.info("Exiting...")
-                        break
-                    
-                    messages.append({"role": "user", "content": user_input})
-                    
-                    # Continue the conversation until no more tool calls are needed
-                    max_iterations = int(os.getenv("MAX_ITERATIONS", 25))  # Prevent infinite loops
-                    iteration = 0
-                    
-                    while iteration < max_iterations:
-                        iteration += 1
-                        
-                        # Get LLM response
-                        llm_response_content, llm_response = self.llm_client.get_response(messages)
-                        
-                        # Add assistant's response to messages
-                        if llm_response.get("message"):
-                            messages.append(llm_response["message"])
-                        
-                        # Check if the assistant wants to use tools
-                        acted, tool_results = await self.process_llm_response(llm_response)
-                        
-                        if acted:
-                            # Add all tool results to messages
-                            for tool_result in tool_results:
-                                messages.append(tool_result)
-                            
-                            logging.info(f"Executed {len(tool_results)} tools, continuing conversation...")
-                            # Continue the loop to get the assistant's next response
-                            
-                        else:
-                            # No tools called, this is the final response
-                            print(f"Assistant: {llm_response_content}")
-                            break
-                    
-                    if iteration >= max_iterations:
-                        print("Assistant: I've reached the maximum number of tool calls for this request.")
-                        
-                except KeyboardInterrupt:
-                    logging.info("\nExiting...")
+        while True:
+            try:
+                user_input = input("plan generator,you: ").strip()
+                if user_input.lower() in ["quit", "exit"]:
+                    logging.info("Exiting...")
                     break
+
+                llm_response_content, acted = await self.process_one_query(messages, user_input)
+            #     if not acted:
+            #         # If no tools were called, print the final response
+            #         print(f"Assistant: {llm_response_content}")
+            #         break
+            # # TODO: 这个停止条件可以适当改变，比如可能会出现让其修改指令的目的，
+            except KeyboardInterrupt:
+                logging.info("\nExiting...")
+                break
+        
+        await self.cleanup_servers()
                     
-        finally:
-            await self.cleanup_servers()
 
 
 async def main() -> None:

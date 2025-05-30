@@ -11,30 +11,43 @@ load_dotenv()
 from client.custom_agent.agents.react_agent import BaseAgent
 
 PLAN_EXECUTOR_PROMPT = """
-You are a ReAct agent designed to solve problems through a cycle of reasoning, acting, and observing. Your goal is to answer the user's query accurately by breaking it down into steps, reasoning about each step, and using tools when necessary.
+You are a ReAct Plan-Executing Agent designed to execute tasks within Markdown-based plans created by a plan-generating agent, as part of an automated pipeline. Your role is to automatically identify and execute tasks in the most recently generated or unfinished plan, update task statuses, and add notes for traceability, using available tools to interact with Markdown plan files. You do not generate plans or require a specific plan ID unless explicitly provided; instead, you prioritize the latest or incomplete plans.
 
 ### Instructions:
-1. **Understand the Query**: Analyze the user's input to identify the task or question.
-2. **Reasoning**: Think step-by-step to determine the best approach. Explain your reasoning clearly, considering possible actions or information needed.
-3. **Action**: If external information or computation is required, call the appropriate tool by specifying its name and parameters. Only use tools when necessary.
-4. **Observation**: Incorporate the results of tool calls into your reasoning to refine your answer.
-5. **Final Answer**: Provide a clear, concise response to the user's query once all steps are complete.
-
-### Available Tools:
 {tools_description}
 
 ### Guidelines:
-- If a tool is needed, include a tool call in your response with the format specified by the API.
-- If no tool is needed, provide the answer directly in the `content` field.
-- If the query is unclear, ask for clarification and explain why.
-- Avoid unnecessary tool calls; reason first to determine if they are required.
-- If multiple steps are needed, iterate through reasoning and tool calls until the task is resolved.
+- Prioritize executing the most recent or unfinished plan unless a `plan_id` is specified.
+- Use `list_plans` or `list_markdown_files` to identify plans, sorting by `created_at` or `last_modified` for recency.
+- Check task dependencies before execution, using `get_plan` to access the plan's JSON structure if available.
+- Use `get_next_unfinished_task` for sequential execution, ensuring dependencies are satisfied.
+- Update task status with `mark_task_status` and log execution details with `add_note_to_task`.
+- Avoid unnecessary tool calls; reason first to determine execution steps.
+- If no plans or tasks are available, return a clear message (e.g., "No unfinished plans found").
+- Ensure all changes are persisted in the Markdown file for compatibility with other agents.
+
+### Example Interaction:
+**User**: Execute the latest plan.
+**Your Response**:
+- Reasoning: No `plan_id` provided, so I'll find the most recent plan using `list_plans`. Then, I'll locate its Markdown file and execute the next unfinished task, respecting dependencies.
+- Action: Call `list_plans` to get available plans.
+- Observation: (Assume result: `[{"plan_id": "1234", "title": "Marketing Campaign", "created_at": "2025-05-30T12:00:00"}]`, sorted by `created_at`.)
+- Action: Call `get_markdown_file_path` with `plan_id: "1234"`.
+- Observation: (Assume result: `{"file_path": "/path/to/1234.md", "exists": true}`.)
+- Action: Call `get_plan` with `plan_id: "1234"` to check dependencies.
+- Observation: (Assume tasks with dependencies: `task2` depends on `task1`.)
+- Action: Call `get_next_unfinished_task` with `markdown_path: "/path/to/1234.md"`.
+- Observation: (Assume result: `{"id": "task1", "content": "Conduct market research", "status": "todo"}`.)
+- Reasoning: Task1 has no dependencies and is unfinished. I'll mark it as done and add a note.
+- Action: Call `mark_task_status` with `markdown_path: "/path/to/1234.md"`, `task_id: "task1"`, `status: "done"`.
+- Action: Call `add_note_to_task` with `markdown_path: "/path/to/1234.md"`, `task_id: "task1"`, `note: "Completed market research on 2025-05-30"`.
+- Final Answer: Executed plan "1234" (Marketing Campaign). Task "task1" (Conduct market research) marked as done, with note added. One task completed, 2 tasks remain.
 
 
-Please respond with your reasoning, any necessary tool calls, and the final answer (if ready). If a tool call is needed, include it in the API-compatible format. If the query requires clarification, ask specific questions.
+Please respond with your reasoning, any necessary tool calls, and the final execution summary (if ready). If a tool call is needed, include it in the API-compatible format. If the task requires clarification (e.g., no plans available), ask specific questions.
 """
 
-class PlanGeneratorAgent(BaseAgent):
+class PlanExecutorAgent(BaseAgent):
     """Implements a Plan Generator agent using LLM and tool servers with proper OpenAI tool calling."""
     
     def __init__(self, servers: list[BaseServer], llm_client: BaseLLMClient) -> None:
@@ -54,79 +67,82 @@ class PlanGeneratorAgent(BaseAgent):
             })
         return tools_schema
 
+    async def initialize_servers(self) -> None:
+        """Initialize all servers."""
+        for server in self.servers:
+            try:
+                await server.initialize()
+            except Exception as e:
+                logging.error(f"Failed to initialize server: {e}")
+                await self.cleanup_servers()
+                return
+
+
+    async def execute_plan(self, user_input: str=None) -> str:
+        """Execute a plan based on user input."""
+        await self.initialize_servers()
+        # Collect all tools from all servers
+        all_tools = []
+        for server in self.servers:
+            tools = await server.list_tools()
+            all_tools.extend(tools)
+        
+        # Build tools schema for OpenAI
+        tools_schema = self._build_tools_schema(all_tools)
+        tools_description = "\n".join([tool.format_for_llm() for tool in all_tools])
+
+        system_prompt = PLAN_EXECUTOR_PROMPT.format(tools_description=tools_description)
+        
+        messages = [{"role": "system", "content": system_prompt}]
+
+        while True:
+            try:
+                llm_response_content, acted = await self.process_one_query(messages,"Executing the latest plan")
+                if not acted:
+                    # If no tools were called, print the final response
+                    print(f"Assistant: {llm_response_content}")
+                    return llm_response_content
+            # TODO: 这个停止条件可以适当改变，比如可能会出现让其修改指令的目的，
+            except KeyboardInterrupt:
+                logging.info("\nExiting...")
+                break
+        
+        await self.cleanup_servers()
+
+
     async def start(self) -> None:
-        try:
-            # Initialize all servers
-            for server in self.servers:
-                try:
-                    await server.initialize()
-                except Exception as e:
-                    logging.error(f"Failed to initialize server: {e}")
-                    await self.cleanup_servers()
-                    return
+        await self.initialize_servers()
+        # Collect all tools from all servers
+        all_tools = []
+        for server in self.servers:
+            tools = await server.list_tools()
+            all_tools.extend(tools)
+        
+        # Build tools schema for OpenAI
+        tools_schema = self._build_tools_schema(all_tools)
+        tools_description = "\n".join([tool.format_for_llm() for tool in all_tools])
 
-            # Collect all tools from all servers
-            all_tools = []
-            for server in self.servers:
-                tools = await server.list_tools()
-                all_tools.extend(tools)
-            
-            # Build tools schema for OpenAI
-            tools_schema = self._build_tools_schema(all_tools)
-            tools_description = "\n".join([tool.format_for_llm() for tool in all_tools])
+        system_prompt = PLAN_EXECUTOR_PROMPT.format(tools_description=tools_description)
+        
+        messages = [{"role": "system", "content": system_prompt}]
 
-            system_prompt = PLAN_EXECUTOR_PROMPT.format(tools_description=tools_description)
-            
-            messages = [{"role": "system", "content": system_prompt}]
-
-            while True:
-                try:
-                    user_input = input("You: ").strip()
-                    if user_input.lower() in ["quit", "exit"]:
-                        logging.info("Exiting...")
-                        break
-                    
-                    messages.append({"role": "user", "content": user_input})
-                    
-                    # Continue the conversation until no more tool calls are needed
-                    max_iterations = int(os.getenv("MAX_ITERATIONS", 25))  # Prevent infinite loops
-                    iteration = 0
-                    
-                    while iteration < max_iterations:
-                        iteration += 1
-                        
-                        # Get LLM response
-                        llm_response_content, llm_response = self.llm_client.get_response(messages)
-                        
-                        # Add assistant's response to messages
-                        if llm_response.get("message"):
-                            messages.append(llm_response["message"])
-                        
-                        # Check if the assistant wants to use tools
-                        acted, tool_results = await self.process_llm_response(llm_response)
-                        
-                        if acted:
-                            # Add all tool results to messages
-                            for tool_result in tool_results:
-                                messages.append(tool_result)
-                            
-                            logging.info(f"Executed {len(tool_results)} tools, continuing conversation...")
-                            # Continue the loop to get the assistant's next response
-                            
-                        else:
-                            # No tools called, this is the final response
-                            print(f"Assistant: {llm_response_content}")
-                            break
-                    
-                    if iteration >= max_iterations:
-                        print("Assistant: I've reached the maximum number of tool calls for this request.")
-                        
-                except KeyboardInterrupt:
-                    logging.info("\nExiting...")
+        while True:
+            try:
+                user_input = input("plan generator,you: ").strip()
+                if user_input.lower() in ["quit", "exit"]:
+                    logging.info("Exiting...")
                     break
-                    
-        finally:
-            await self.cleanup_servers()
 
+                llm_response_content, acted = await self.process_one_query(messages,"Executing the latest plan")
+                if not acted:
+                    # If no tools were called, print the final response
+                    print(f"Assistant: {llm_response_content}")
+                    return llm_response_content
+            # TODO: 这个停止条件可以适当改变，比如可能会出现让其修改指令的目的，
+            except KeyboardInterrupt:
+                logging.info("\nExiting...")
+                break
+        
+        await self.cleanup_servers()
 
 

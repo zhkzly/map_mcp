@@ -63,6 +63,7 @@ class BaseServer:
         self.session: ClientSession | None = None
         self._cleanup_lock: asyncio.Lock = asyncio.Lock()
         self.exit_stack: AsyncExitStack = AsyncExitStack()
+        self.server_type: str|None=None 
 
     async def initialize(self) -> None:
         """Initialize the server connection."""
@@ -154,6 +155,7 @@ class StdioServer(BaseServer):
     def __init__(self, name: str, config: dict[str, Any]) -> None:
         super().__init__(name, config)
         self.stdio_context: Any | None = None
+        self.server_type = "stdio"
         
 
     async def initialize(self) -> None:
@@ -190,6 +192,9 @@ class StdioServer(BaseServer):
 
 class StreamableHttpServer(BaseServer):
     """Manages MCP server connections over StreamableHTTP transport."""
+    def __init__(self, name: str, config: dict[str, Any]) -> None:
+        super().__init__(name, config)
+        self.server_type = "streamable-http"
 
     async def initialize(self) -> None:
         """Initialize the server connection over StreamableHTTP protocol."""
@@ -249,6 +254,9 @@ class StreamableHttpServer(BaseServer):
 
 class SseServer(BaseServer):
     """Manages MCP server connections over SSE transport."""
+    def __init__(self, name: str, config: dict[str, Any]) -> None:
+        super().__init__(name, config)
+        self.server_type = "sse"
 
     async def initialize(self) -> None:
         """Initialize the server connection over SSE protocol."""
