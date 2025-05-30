@@ -49,44 +49,23 @@ Please respond with your reasoning, any necessary tool calls, and the final exec
 
 class PlanExecutorAgent(BaseAgent):
     """Implements a Plan Generator agent using LLM and tool servers with proper OpenAI tool calling."""
-    
-    def __init__(self, servers: list[BaseServer], llm_client: BaseLLMClient) -> None:
-        super().__init__(servers, llm_client)
 
-    def _build_tools_schema(self, tools) -> List[Dict[str, Any]]:
-        """Build OpenAI-compatible tools schema."""
-        tools_schema = []
-        for tool in tools:
-            tools_schema.append({
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": tool.input_schema
-                }
-            })
-        return tools_schema
-
-    async def initialize_servers(self) -> None:
-        """Initialize all servers."""
-        for server in self.servers:
-            try:
-                await server.initialize()
-            except Exception as e:
-                logging.error(f"Failed to initialize server: {e}")
-                await self.cleanup_servers()
-                return
-
+    def __init__(self, agent_servers: list[BaseServer], remote_servers: list[BaseServer], llm_client: BaseLLMClient) -> None:
+        super().__init__(agent_servers=agent_servers, remote_servers=remote_servers, llm_client=llm_client)
 
     async def execute_plan(self, user_input: str=None) -> str:
         """Execute a plan based on user input."""
+
         await self.initialize_servers()
         # Collect all tools from all servers
         all_tools = []
-        for server in self.servers:
+        for server in self.agent_servers:
             tools = await server.list_tools()
             all_tools.extend(tools)
-        
+        for server in self.remote_servers:
+            tools = await server.list_tools()
+            all_tools.extend(tools)
+
         # Build tools schema for OpenAI
         tools_schema = self._build_tools_schema(all_tools)
         tools_description = "\n".join([tool.format_for_llm() for tool in all_tools])
@@ -115,6 +94,9 @@ class PlanExecutorAgent(BaseAgent):
         # Collect all tools from all servers
         all_tools = []
         for server in self.servers:
+            tools = await server.list_tools()
+            all_tools.extend(tools)
+        for server in self.remote_servers:
             tools = await server.list_tools()
             all_tools.extend(tools)
         

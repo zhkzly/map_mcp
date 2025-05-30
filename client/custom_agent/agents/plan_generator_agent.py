@@ -46,41 +46,17 @@ You are a ReAct Plan-Generating Agent designed to create detailed, actionable pl
 
 class PlanGeneratorAgent(BaseAgent):
     """Implements a Plan Generator agent using LLM and tool servers with proper OpenAI tool calling."""
-    
-    def __init__(self, servers: list[BaseServer], llm_client: BaseLLMClient) -> None:
-        super().__init__(servers, llm_client)
 
-    def _build_tools_schema(self, tools) -> List[Dict[str, Any]]:
-        """Build OpenAI-compatible tools schema."""
-        tools_schema = []
-        for tool in tools:
-            tools_schema.append({
-                "type": "function",
-                "function": {
-                    "name": tool.name,
-                    "description": tool.description,
-                    "parameters": tool.input_schema
-                }
-            })
-        return tools_schema
-
-    async def initialize_servers(self) -> None:
-        """Initialize all servers."""
-        for server in self.servers:
-            try:
-                await server.initialize()
-            except Exception as e:
-                logging.error(f"Failed to initialize server: {e}")
-                await self.cleanup_servers()
-                return
-
+    def __init__(self, agent_servers: list[BaseServer], remote_servers: list[BaseServer], llm_client: BaseLLMClient) -> None:
+        super().__init__(agent_servers=agent_servers, remote_servers=remote_servers, llm_client=llm_client)
 
 
     async def plan_generate(self, user_input: str) -> None:
         """Generate a plan based on user input."""
         # This method can be used to generate a plan based on user input
         # For now, it just returns the user input as a placeholder
-        await self.initialize_servers()
+        if not self.initialized:
+            await self.initialize_servers()
         # Collect all tools from all servers
         all_tools = []
         for server in self.servers:
@@ -119,6 +95,10 @@ class PlanGeneratorAgent(BaseAgent):
         for server in self.servers:
             tools = await server.list_tools()
             all_tools.extend(tools)
+        for server in self.remote_servers:
+            tools = await server.list_tools()
+            all_tools.extend(tools)
+
         
         # Build tools schema for OpenAI
         tools_schema = self._build_tools_schema(all_tools)

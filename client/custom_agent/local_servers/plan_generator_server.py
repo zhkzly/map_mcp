@@ -308,7 +308,7 @@ def add_task_note(plan_id: str, task_id: str, note: str) -> Dict[str, Any]:
         return {"error": f"Task {task_id} does not exist"}
 
 # Resource route, directly returns the Markdown of a specific plan
-@mcp.resource("plan/{plan_id}/markdown")
+@mcp.resource("plan://plan/{plan_id}/markdown")
 def get_plan_markdown(plan_id: str) -> str:
     """
     Retrieve the Markdown representation of a plan by its ID.
@@ -362,7 +362,7 @@ def get_markdown_file_path(plan_id: str) -> Dict[str, Any]:
         "size_bytes": os.path.getsize(file_path) if os.path.exists(file_path) else 0
     }
 
-@mcp.resource("plan/{plan_id}/status")
+@mcp.resource("plan://plan/{plan_id}/status")
 def get_plan_status(plan_id: str) -> Dict[str, Any]:
     """
     Get a summary of the current status of a plan, including task counts and completion percentage.
@@ -396,7 +396,7 @@ def get_plan_status(plan_id: str) -> Dict[str, Any]:
         }
     return {"error": f"Plan {plan_id} does not exist"}
 
-@mcp.resource("plans/markdown/list")
+@mcp.resource("plan://plans/markdown/list")
 def list_markdown_files() -> List[Dict[str, Any]]:
     """
     List all Markdown files generated for plans, with file metadata.

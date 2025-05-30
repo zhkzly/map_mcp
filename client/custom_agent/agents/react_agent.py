@@ -12,9 +12,34 @@ load_dotenv()
 
 class BaseAgent:
     """Base class for agents that interact with LLMs and tool servers."""
-    def __init__(self, servers: list[BaseServer], llm_client: BaseLLMClient) -> None:
-        self.servers = servers
+    def __init__(self, agent_servers: list[BaseServer], remote_servers: list[BaseServer], llm_client: BaseLLMClient) -> None:
+        self.agent_servers = agent_servers
+        self.remote_servers = remote_servers
         self.llm_client = llm_client
+    
+    def _build_tools_schema(self, tools) -> List[Dict[str, Any]]:
+        """Build OpenAI-compatible tools schema."""
+        tools_schema = []
+        for tool in tools:
+            tools_schema.append({
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": tool.input_schema
+                }
+            })
+        return tools_schema
+
+    async def initialize_servers(self) -> None:
+        """Initialize all servers."""
+        for server in self.agent_servers:
+            try:
+                await server.initialize()
+            except Exception as e:
+                logging.error(f"Failed to initialize server: {e}")
+                await self.cleanup_servers()
+                return
 
     async def process_llm_response(self, llm_response: dict) -> tuple[bool, List[Dict[str, Any]]]:
         """
@@ -140,7 +165,7 @@ class BaseAgent:
 
     async def cleanup_servers(self) -> None:
         """Clean up all servers properly."""
-        for server in reversed(self.servers):
+        for server in reversed(self.agent_servers):
             try:
                 await server.cleanup()
             except Exception as e:

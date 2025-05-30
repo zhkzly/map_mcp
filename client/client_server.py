@@ -213,11 +213,12 @@ class StreamableHttpServer(BaseServer):
         auth = None
         if self.config.get("api_key"):
             # 使用httpx的Auth接口
-            import httpx
-            auth = httpx.Auth()
+            # import httpx
+            # auth = httpx.Auth()
             # 或者简单地添加到headers中
-            headers["Authorization"] = f"Bearer {self.config['api_key']}"
-        
+            headers["Content-Type"] = "application/json"
+            # headers["Authorization"] = f"Bearer {self.config['api_key']}"
+
         try:
             # 使用正确的参数名和签名创建StreamableHTTP客户端
             transport = await self.exit_stack.enter_async_context(
@@ -227,7 +228,7 @@ class StreamableHttpServer(BaseServer):
                     timeout=timeout,
                     sse_read_timeout=sse_read_timeout,
                     terminate_on_close=terminate_on_close,
-                    auth=auth,
+                    # auth=auth,
                 )
             )
             
@@ -274,7 +275,8 @@ class SseServer(BaseServer):
         auth = None
         if self.config.get("api_key"):
             # 使用httpx的Auth接口或添加到headers中
-            headers["Authorization"] = f"Bearer {self.config['api_key']}"
+            # headers["Authorization"] = f"Bearer {self.config['api_key']}"
+            headers["Content-Type"] = "application/json"
         
         try:
             # 使用正确的参数创建SSE客户端

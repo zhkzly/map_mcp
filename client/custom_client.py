@@ -57,13 +57,15 @@ Please respond with a JSON object containing `content` and `tool_call`. Ensure `
 class ChatSession:
     """Orchestrates the interaction between user, LLM, and tools."""
 
-    def __init__(self, servers: list[BaseServer], plan_generator: BaseAgent, plan_executor: BaseAgent) -> None:
+    def __init__(self, servers: list[BaseServer], plan_generator: BaseAgent, plan_executor: BaseAgent,initialize:bool=True) -> None:
         self.servers: list[BaseServer] = servers
         self.plan_generator: BaseAgent = plan_generator
         self.plan_executor: BaseAgent = plan_executor
         self.tools: dict = {"plan_generator": self.plan_generator, "plan_executor": self.plan_executor}
         self.cheap_llm= OpenAIClient(api_key=os.getenv("OPENAI_API_KEY", ""),
                                      model_id=os.getenv("MODEL_ID", "gpt-3.5-turbo"))
+
+        self.initialized = initialize
 
     async def cleanup_servers(self) -> None:
         """Clean up all servers properly."""
@@ -79,7 +81,7 @@ class ChatSession:
 
     async def start(self) -> None:
         """Main chat session handler."""
-        try:
+        if not self.initialized:
             for server in self.servers:
                 try:
                     await server.initialize()
@@ -87,8 +89,8 @@ class ChatSession:
                     logging.error(f"Failed to initialize server: {e}")
                     await self.cleanup_servers()
                     return
-
-
+        try:
+            
             messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
             while True:
@@ -118,6 +120,15 @@ class ChatSession:
         finally:
             await self.cleanup_servers()
 
+async def initialize_servers(servers: list[BaseServer]) -> None:
+    """Initialize all servers in the session."""
+    for server in servers:
+        try:
+            await server.initialize()
+        except Exception as e:
+            logging.error(f"Failed to initialize server {server.name}: {e}")
+            await server.cleanup()
+            raise e
 
 async def main() -> None:
     """Initialize and run the chat session."""
@@ -127,6 +138,7 @@ async def main() -> None:
     server_config = config.load_config(os.getenv("CLIENT_SERVER_CONFIG_PATH", "servers_config.json"))
     # servers = [
     #     StdioServer(name, srv_config)
+    
     #     if srv_config["type"] == "stdio" else StreamableHttpServer(name, srv_config)
     #     for name, srv_config in server_config["mcpServers"].items()
     # ]
@@ -145,6 +157,7 @@ async def main() -> None:
         return
 
 
+
     # config local server client,必须考虑重新修改这些名称了，区分度不够
     local_server_config = config.load_config(os.getenv("LOCAL_SERVER_CONFIG_PATH", "local_server_config.json"))
     local_server_client={"plan_executor_server": None, "plan_generator_server": None}
@@ -159,16 +172,20 @@ async def main() -> None:
         else:
             logging.error(f"Unsupported server type: {srv_config['type']}")
 
+    await initialize_servers(servers)
+    logging.info("All remote servers initialized successfully.")
 
     # 构造agent
     plan_generator = PlanGeneratorAgent(
-        servers=[local_server_client["plan_generator_server"]],
+        agent_servers=[local_server_client["plan_generator_server"]],
+        remote_servers=servers,
        llm_client=OpenAIClient(
             api_key=os.getenv("OPENAI_API_KEY", ""),
             model_id=os.getenv("MODEL_ID", "gpt-3.5-turbo")
         ))
     plan_executor = PlanExecutorAgent(
-        servers=[local_server_client["plan_executor_server"]],
+        agent_servers=[local_server_client["plan_executor_server"]],
+        remote_servers=servers,
         llm_client=OpenAIClient(
             api_key=os.getenv("OPENAI_API_KEY", ""),
             model_id=os.getenv("MODEL_ID", "gpt-3.5-turbo")
@@ -178,7 +195,8 @@ async def main() -> None:
     chat_session = ChatSession(
         servers=servers,
         plan_generator=plan_generator,
-        plan_executor=plan_executor
+        plan_executor=plan_executor,
+        initialize=True
     )
     
 
