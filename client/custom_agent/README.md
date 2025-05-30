@@ -136,8 +136,42 @@ class Function(BaseModel):
 
 ```
 
+```json
+  {
+    "id": "chatcmpl-12345",
+    "object": "chat.completion",
+    "created": 1708853935,
+    "model": "gpt-4o",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": null,
+          "tool_calls": [
+            {
+              "id": "call_abc123",
+              "type": "function",
+              "function": {
+                "name": "get_current_weather",
+                "arguments": "{\"location\": \"San Francisco, CA\", \"unit\": \"celsius\"}"
+              }
+            }
+          ]
+        },
+        "finish_reason": "tool_calls"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 100,
+      "completion_tokens": 50,
+      "total_tokens": 150
+  }
+}
 
 
+
+```
 
 
 

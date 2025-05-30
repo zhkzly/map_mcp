@@ -4,6 +4,8 @@ import logging
 import requests
 from dotenv import load_dotenv
 from openai import OpenAI
+from typing import Tuple
+import json
 
 load_dotenv()
 
@@ -50,7 +52,7 @@ class LLMClient(BaseLLMClient):
         if not self.model_id:
             raise ValueError("Model ID must be provided for LLMClient.")
 
-    def get_response(self, messages: list[dict[str, str]]) -> str:
+    def get_response(self, messages: list[dict[str, str]]) -> Tuple[str, dict[str, str]]:
         """Get a response from the LLM.
 
         Args:
@@ -106,8 +108,9 @@ class LLMClient(BaseLLMClient):
         try:
             response = requests.post(url, headers=headers, json=payload)
             response.raise_for_status()
+            print(f"the type of response is {type(response)}")
             data = response.json()
-            return data["choices"][0]["message"]["content"]
+            return data["choices"][0]["message"]["content"], data["choices"][0]
 
         except requests.RequestException as e:
             error_message = f"Error getting LLM response: {str(e)}"
@@ -131,7 +134,7 @@ class OpenAIClient(BaseLLMClient):
         self.client = OpenAI(api_key=api_key, base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"))
         self.model_id = model_id
 
-    def get_response(self, messages: list[dict[str, str]]) -> str:
+    def get_response(self, messages: list[dict[str, str]]) -> Tuple[str, dict[str, str]]:
         """Get a response from the OpenAI API.
 
         Args:
@@ -141,4 +144,7 @@ class OpenAIClient(BaseLLMClient):
             The OpenAI's response as a string.
         """
         response = self.client.chat.completions.create(messages=messages,model=self.model_id,temperature=0.7,max_tokens=4096,top_p=1,stream=False)
-        return response.choices[0].message.content,response.choices[0].message
+        data=json.loads(response.json())
+        # print(f"the type of data is {type(data)}")
+        # print(f"the value of data is {data}")
+        return data["choices"][0]["message"]["content"], data["choices"][0]
