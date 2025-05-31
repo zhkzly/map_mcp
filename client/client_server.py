@@ -211,12 +211,12 @@ class StreamableHttpServer(BaseServer):
         
         # 如果配置中有API key，添加为Bearer token
         auth = None
-        if self.config.get("api_key"):
+        # if self.config.get("api_key"):
             # 使用httpx的Auth接口
             # import httpx
             # auth = httpx.Auth()
             # 或者简单地添加到headers中
-            headers["Content-Type"] = "application/json"
+            # headers["Content-Type"] = "application/json"
             # headers["Authorization"] = f"Bearer {self.config['api_key']}"
 
         try:

@@ -15,7 +15,7 @@ config.load_env()
 
 plan_generator_config = config.load_config(os.getenv("PLAN_GENERATOR_CONFIG_PATH", "config/plan_generator_config.json"))
 # Create an MCP server
-mcp = FastMCP("Markdown Plan Manager",settings=plan_generator_config)
+mcp = FastMCP("Markdown Plan Manager",**plan_generator_config)
 
 # Define task status enum
 class TaskStatus(str, Enum):
@@ -514,6 +514,8 @@ def _generate_markdown(plan: Plan) -> str:
 def main():
     # 不采用默认的stdio启动而是http的方式启动
     mcp.run(transport="streamable-http")
+    # mcp.run_streamable_http_async
+    # mcp.run()
 
 if __name__ == "__main__":
     main()

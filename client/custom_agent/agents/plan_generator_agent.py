@@ -4,6 +4,7 @@ from typing import Any, List, Dict
 
 from client.client_server import BaseServer
 from client.llm_client import BaseLLMClient
+from itertools import chain
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -55,13 +56,17 @@ class PlanGeneratorAgent(BaseAgent):
         """Generate a plan based on user input."""
         # This method can be used to generate a plan based on user input
         # For now, it just returns the user input as a placeholder
-        if not self.initialized:
-            await self.initialize_servers()
+        
+        await self.initialize_servers()
         # Collect all tools from all servers
         all_tools = []
-        for server in self.servers:
+        i=1
+        logging.debug(f"the servers are {self.remote_servers} and {self.agent_servers}")
+        for server in chain(self.remote_servers, self.agent_servers):
+            logging.debug(f"Collecting tools from server {i}...")
             tools = await server.list_tools()
             all_tools.extend(tools)
+            i+=1
         
         # Build tools schema for OpenAI
         tools_schema = self._build_tools_schema(all_tools)

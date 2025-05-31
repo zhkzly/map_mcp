@@ -1,0 +1,45 @@
+{
+  "LocalServers": {
+    "plan_executor_server": {
+      "command": "uvx",
+      "args": ["client/custom_agent/local_servers/plan_executor_server.py"],
+      "type":"stdio"
+    },
+    // "plan_generator_server": {
+    //   "type": "streamable-http",
+    //   "headers": {
+    //     // "Authorization": "Bearer YOUR_API_KEY",
+    //     "Content-Type": "application/json"
+    //   },
+    //   "url": "http://localhost:8090"
+    // }
+    // 上面的内容我们手动启动即可
+      "plan_generator_server": {
+      "type": "streamable-http",
+      "command": "uv",
+      "args": ["run","client/custom_agent/local_servers/plan_generator_server.py"],
+      "headers": {
+        // "Authorization": "Bearer YOUR_API_KEY",
+        "Content-Type": "application/json"
+      },
+      "url": "http://localhost:8090"
+    }
+  },
+  "RemoteServers": {
+    "mcp_sqlite": {
+      "command": "uvx",
+      "args": ["mcp-server-sqlite", "--db-path", "./test.db"],
+      "type":"stdio"
+    },
+    // "plan_generator_server": {
+    //   "command": "uvx",
+    //   "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
+    //   "type": "streamable-http",
+    //   "url": "http://localhost:3000"
+    // }
+    // 上面的内容我们手动启动即可
+  }
+
+
+
+}

@@ -12,7 +12,7 @@ load_dotenv()
 # TODO:模型调用需要改变，最好可以支持多种模型，最简单的就是OPENAI的模型调用，不会进行过多的可扩展性的计划
 # 下面的调用形式采用的是web的形式，实际上可以采用python的sdk的形式
 # from openai import OpenAI
-# client=OpenAI(api_key=os.getenv("OPENAI_API_KEY"),base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"))
+# client=OpenAI(api_key=os.getenv("GEMINI_API_KEY"),base_url=os.getenv("GEMINI_BASE_URL", "https://api.openai.com/v1"))
 # client.chat.completions.create(
 #     model="gemini-1.5-flash",
 #     messages=messages,
@@ -64,7 +64,7 @@ class LLMClient(BaseLLMClient):
         Raises:
             httpx.RequestError: If the request to the LLM fails.
         """
-        url = os.getenv("OPENAI_BASE_URL_HTTP", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions")
+        url = os.getenv("GEMINI_BASE_URL_HTTP", "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions")
 
         headers = {
             "Content-Type": "application/json",
@@ -131,10 +131,11 @@ class OpenAIClient(BaseLLMClient):
     """Manages communication with the OpenAI API."""
 
     def __init__(self, api_key: str, model_id: str =os.getenv("MODEL_ID","gemini-2.0-flash") , **kwargs) -> None:
-        self.client = OpenAI(api_key=api_key, base_url=os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1"))
+        # print(f"the base url  is {os.getenv('GEMINI_BASE_URL', 'https://api.openai.com/v1')}")
+        self.client = OpenAI(api_key=api_key, base_url=os.getenv("GEMINI_BASE_URL", "https://api.openai.com/v1"))
         self.model_id = model_id
 
-    def get_response(self, messages: list[dict[str, str]]) -> Tuple[str, dict[str, str]]:
+    async def get_response(self, messages: list[dict[str, str]]) -> Tuple[str, dict[str, str]]:
         """Get a response from the OpenAI API.
 
         Args:

@@ -1,5 +1,5 @@
 {
     "host": "localhost",
-    "port": 8080,
-    "mount_path": "/plan_generator"
+    "port": 8090,
+    "mount_path": ""
 }
