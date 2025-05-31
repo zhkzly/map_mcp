@@ -1,5 +1,7 @@
 {
     "host": "localhost",
     "port": 8090,
-    "mount_path": ""
+    // "mount_path": "/plan_generator",
+    // 这个是给sse用的
+    "streamable_http_path":"/plan_generator/mcp"
 }
