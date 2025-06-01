@@ -28,22 +28,22 @@ You are a ReAct Plan-Generating Agent designed to create detailed, actionable pl
 4. **Observation**: Incorporate tool call results into your reasoning to refine the plan.
 5. **Plan Generation**: Produce a structured JSON plan with the following format:
    ```json
-   {
+   {{
      "plan_id": "<unique plan identifier>",
      "title": "<plan title>",
      "description": "<plan description>",
      "tasks": [
-       {
+       {{
          "task_id": "<unique task identifier>",
          "content": "<task description>",
          "dependencies": ["<task_id of dependent tasks>"],
          "resources": ["<required tools, data, or inputs>"],
          "expected_output": "<description of expected result>",
          "notes": ["<additional notes or considerations>"]
-       }
+       }}
      ],
      "notes": ["<overall plan notes or considerations>"]
-   }"""
+   }}"""
 
 class PlanGeneratorAgent(BaseAgent):
     """Implements a Plan Generator agent using LLM and tool servers with proper OpenAI tool calling."""
@@ -70,8 +70,11 @@ class PlanGeneratorAgent(BaseAgent):
         
         # Build tools schema for OpenAI
         tools_schema = self._build_tools_schema(all_tools)
-        tools_description = "\n".join([tool.format_for_llm() for tool in all_tools])
 
+        tools_description = "\n".join([tool.format_for_llm() for tool in all_tools])
+        logging.debug(f"Tools description: {tools_description}")
+        tools_description = self._escape_braces_for_format(tools_description)
+        logging.debug(f"Tools description for LLM: {tools_description}")
         system_prompt = PLAN_GENERATOR_PROMPT.format(tools_description=tools_description)
         
         messages = [{"role": "system", "content": system_prompt}]
@@ -108,7 +111,8 @@ class PlanGeneratorAgent(BaseAgent):
         # Build tools schema for OpenAI
         tools_schema = self._build_tools_schema(all_tools)
         tools_description = "\n".join([tool.format_for_llm() for tool in all_tools])
-
+        tools_description = self._escape_braces_for_format(tools_description)
+        print(f"Tools description for LLM: {tools_description}")
         system_prompt = PLAN_GENERATOR_PROMPT.format(tools_description=tools_description)
         
         messages = [{"role": "system", "content": system_prompt}]

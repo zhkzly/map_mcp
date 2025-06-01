@@ -30,6 +30,10 @@ class BaseAgent:
                 }
             })
         return tools_schema
+    
+    def _escape_braces_for_format(self, text: str) -> str:
+        """Escapes literal curly braces in a string for use with .format()."""
+        return text.replace('{', '{{').replace('}', '}}')
 
     async def initialize_servers(self) -> None:
         """Initialize all servers."""
@@ -128,6 +132,8 @@ class BaseAgent:
     async def process_one_query(self, messages:List[Dict[str, str]], query: str) -> str:
 
         messages.append({"role": "user", "content": query})
+        logging.debug(f"User query added to messages: {query}")
+        logging.debug(f"Current messages: {messages}")
 
         # Continue the conversation until no more tool calls are needed
         max_iterations = int(os.getenv("MAX_ITERATIONS", 25))  # Prevent infinite loops
@@ -136,7 +142,7 @@ class BaseAgent:
             iteration += 1
             
             # Get LLM response
-            llm_response_content, llm_response = self.llm_client.get_response(messages)
+            llm_response_content, llm_response = await self.llm_client.get_response(messages)
             
             # Add assistant's response to messages
             if llm_response.get("message"):

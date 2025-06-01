@@ -52,7 +52,7 @@ class LLMClient(BaseLLMClient):
         if not self.model_id:
             raise ValueError("Model ID must be provided for LLMClient.")
 
-    def get_response(self, messages: list[dict[str, str]]) -> Tuple[str, dict[str, str]]:
+    async def get_response(self, messages: list[dict[str, str]]) -> Tuple[str, dict[str, str]]:
         """Get a response from the LLM.
 
         Args:
@@ -144,7 +144,7 @@ class OpenAIClient(BaseLLMClient):
         Returns:
             The OpenAI's response as a string.
         """
-        response = self.client.chat.completions.create(messages=messages,model=self.model_id,temperature=0.7,max_tokens=4096,top_p=1,stream=False)
+        response = self.client.chat.completions.create(messages=messages,model=self.model_id,temperature=0.7,top_p=1,stream=False,max_tokens=100000)
         data=json.loads(response.json())
         # print(f"the type of data is {type(data)}")
         # print(f"the value of data is {data}")

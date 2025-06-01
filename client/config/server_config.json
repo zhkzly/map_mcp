@@ -1,8 +1,8 @@
 {
   "LocalServers": {
     "plan_executor_server": {
-      "command": "uvx",
-      "args": ["client/custom_agent/local_servers/plan_executor_server.py"],
+      "command": "mcp",
+      "args": ["run","/home/zkl/Desktop/py_codes/map_mcp/client/custom_agent/agents/plan_executor_agent.py"],
       "type":"stdio"
     },
     // "plan_generator_server": {

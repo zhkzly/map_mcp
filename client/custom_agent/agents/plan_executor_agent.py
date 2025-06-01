@@ -4,7 +4,7 @@ from typing import Any, List, Dict
 
 from client.client_server import BaseServer
 from client.llm_client import BaseLLMClient
-import os
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -69,7 +69,8 @@ class PlanExecutorAgent(BaseAgent):
         # Build tools schema for OpenAI
         tools_schema = self._build_tools_schema(all_tools)
         tools_description = "\n".join([tool.format_for_llm() for tool in all_tools])
-
+        tools_description = self._escape_braces_for_format(tools_description)
+        logging.debug(f"Tools description for LLM: {tools_description}")
         system_prompt = PLAN_EXECUTOR_PROMPT.format(tools_description=tools_description)
         
         messages = [{"role": "system", "content": system_prompt}]
