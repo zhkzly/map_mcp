@@ -148,7 +148,7 @@ class BaseServer:
             except Exception as e:
                 logging.error(f"Error during cleanup of server {self.name}: {e}")
 
-
+# FIXME: can not initialize the execurot server,can not find mcp ，也就是启动的配置是错误的
 class StdioServer(BaseServer):
     """Manages MCP server connections and tool execution."""
 
@@ -174,6 +174,7 @@ class StdioServer(BaseServer):
             env={**os.environ, **self.config["env"]}
             if self.config.get("env")
             else None,
+            cwd=self.config["cwd"],
         )
         try:
             stdio_transport = await self.exit_stack.enter_async_context(

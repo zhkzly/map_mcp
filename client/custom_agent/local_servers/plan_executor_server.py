@@ -264,6 +264,7 @@ def add_note_to_task(ctx: Context, markdown_path: str, task_id: str, note: str) 
         f.writelines(lines)
     return True
 
+
 def main():
     # 默认采用stdio 进行启动，另一个采用http启动
     mcp.run()

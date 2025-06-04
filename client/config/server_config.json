@@ -1,9 +1,10 @@
 {
   "LocalServers": {
     "plan_executor_server": {
-      "command": "mcp",
-      "args": ["run","/home/zkl/Desktop/py_codes/map_mcp/client/custom_agent/agents/plan_executor_agent.py"],
-      "type":"stdio"
+      "command": "/home/zkl/Desktop/py_codes/map_mcp/client/custom_agent/local_servers/plan_executor.sh",
+      "args": [""],
+      "type": "stdio",
+      "cwd": "/home/zkl/Desktop/py_codes/map_mcp/"
     },
     // "plan_generator_server": {
     //   "type": "streamable-http",
@@ -14,23 +15,26 @@
     //   "url": "http://localhost:8090"
     // }
     // 上面的内容我们手动启动即可
-      "plan_generator_server": {
+    "plan_generator_server": {
       "type": "streamable-http",
       "command": "uv",
-      "args": ["run","client/custom_agent/local_servers/plan_generator_server.py"],
+      "args": [
+        "run",
+        "client/custom_agent/local_servers/plan_generator_server.py"
+      ],
       "headers": {
         // "Authorization": "Bearer YOUR_API_KEY",
         "Content-Type": "application/json"
       },
-      "url": "http://localhost:8090/plan_generator/mcp"
+      "url": "http://localhost:8091/plan_generator/mcp"
     }
   },
   "RemoteServers": {
     "mcp_sqlite": {
       "command": "uvx",
       "args": ["mcp-server-sqlite", "--db-path", "./test.db"],
-      "type":"stdio"
-    },
+      "type": "stdio"
+    }
     // "plan_generator_server": {
     //   "command": "uvx",
     //   "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
@@ -39,7 +43,4 @@
     // }
     // 上面的内容我们手动启动即可
   }
-
-
-
 }

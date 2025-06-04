@@ -144,7 +144,7 @@ class OpenAIClient(BaseLLMClient):
         Returns:
             The OpenAI's response as a string.
         """
-        response = self.client.chat.completions.create(messages=messages,model=self.model_id,temperature=0.7,top_p=1,stream=False,max_tokens=100000)
+        response = self.client.chat.completions.create(messages=messages,model=self.model_id,temperature=0.7,top_p=1,stream=False,max_tokens=1000000)
         data=json.loads(response.json())
         # print(f"the type of data is {type(data)}")
         # print(f"the value of data is {data}")
