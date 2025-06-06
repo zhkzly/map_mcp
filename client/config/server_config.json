@@ -3,8 +3,14 @@
     "plan_executor_server": {
       "command": "/home/zkl/Desktop/py_codes/map_mcp/client/custom_agent/local_servers/plan_executor.sh",
       "args": [""],
-      "type": "stdio",
-      "cwd": "/home/zkl/Desktop/py_codes/map_mcp/"
+      // "type": "stdio",
+      "type": "streamable-http",
+      "cwd": "/home/zkl/Desktop/py_codes/map_mcp/",
+      "headers": {
+        // "Authorization": "Bearer YOUR_API_KEY",
+        "Content-Type": "application/json"
+      },
+      "url": "http://localhost:8095/plan_executor/mcp"
     },
     // "plan_generator_server": {
     //   "type": "streamable-http",
@@ -26,14 +32,15 @@
         // "Authorization": "Bearer YOUR_API_KEY",
         "Content-Type": "application/json"
       },
-      "url": "http://localhost:8091/plan_generator/mcp"
+      "url": "http://localhost:8093/plan_generator/mcp"
     }
   },
   "RemoteServers": {
     "mcp_sqlite": {
       "command": "uvx",
       "args": ["mcp-server-sqlite", "--db-path", "./test.db"],
-      "type": "stdio"
+      "type": "stdio",
+      "cwd": "/home/zkl/Desktop/py_codes/map_mcp/"
     }
     // "plan_generator_server": {
     //   "command": "uvx",

@@ -14,7 +14,7 @@ import re
 
 # Configure logging
 logging.basicConfig(
-    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 SYSTEM_PROMPT = """
@@ -174,6 +174,7 @@ async def main() -> None:
     servers=[]
     for name, srv_config in server_config["RemoteServers"].items():
         if srv_config["type"] == "stdio":
+            logging.debug(f"Initializing StdioServer: {name} with config: {srv_config}")
             servers.append(StdioServer(name, srv_config))
         elif srv_config["type"] == "streamable-http":
             servers.append(StreamableHttpServer(name, srv_config))
@@ -220,6 +221,7 @@ async def main() -> None:
             model_id=os.getenv("MODEL_ID", "gpt-3.5-turbo")
         )
     )
+
 
     chat_session = ChatSession(
         servers=servers,

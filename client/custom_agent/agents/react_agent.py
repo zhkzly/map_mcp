@@ -40,6 +40,7 @@ class BaseAgent:
         for server in self.agent_servers:
             try:
                 await server.initialize()
+                logging.info(f"Server {server.name} initialized successfully.")
             except Exception as e:
                 logging.error(f"Failed to initialize server: {e}")
                 await self.cleanup_servers()
