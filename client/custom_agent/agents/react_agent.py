@@ -3,7 +3,7 @@ import json
 import logging
 from typing import Any, List, Dict
 
-from client.client_server import BaseServer, StdioServer
+from client.local_servers.client_server import BaseServer, StdioServer
 from client.llm_client import BaseLLMClient, LLMClient
 from client.config.config import Configuration
 import os

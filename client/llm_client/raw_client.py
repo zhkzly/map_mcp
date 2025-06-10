@@ -4,9 +4,9 @@ import logging
 import os
 
 from client.config.config import Configuration
-from client.client_server import StdioServer,StreamableHttpServer,SseServer
+from client.local_servers.client_server import StdioServer,StreamableHttpServer,SseServer
 from client.llm_client import BaseLLMClient,OpenAIClient, LLMClient
-from client.client_server import BaseServer
+from client.local_servers.client_server import BaseServer
 
 
 

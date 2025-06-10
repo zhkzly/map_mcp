@@ -3,9 +3,9 @@ import logging
 import os
 import json
 from client.config.config import Configuration
-from client.client_server import StdioServer,StreamableHttpServer,SseServer
+from client.local_servers.client_server import StdioServer,StreamableHttpServer,SseServer
 from client.llm_client import OpenAIClient, LLMClient
-from client.client_server import BaseServer
+from client.local_servers.client_server import BaseServer
 from client.custom_agent.agents.react_agent import BaseAgent
 from client.custom_agent.agents.plan_generator_agent import PlanGeneratorAgent
 from client.custom_agent.agents.plan_executor_agent import PlanExecutorAgent

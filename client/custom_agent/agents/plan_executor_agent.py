@@ -2,7 +2,7 @@ import logging
 from typing import Any, List, Dict
 import os
 
-from client.client_server import BaseServer
+from client.local_servers.client_server import BaseServer
 from client.llm_client import BaseLLMClient
 from itertools import chain
 
